@@ -1,0 +1,44 @@
+---
+title: "Immunoediting"
+output: html_notebook
+---
+
+This notebook contains high level information on the pipeline that was used to create the results from the immunoediting analysis. 
+
+# **1) Data download**
+
+## TCGA mutation data
+
+```{r}
+
+```
+
+## TCGA expression data
+
+## TCGA HLA normal .bam files
+
+# **2) Data processing**
+
+## GPPM objects
+
+```{r}
+
+```
+
+## HLA types
+
+## HLA affinities
+
+## Observed mutation data
+
+## Simulated mutation data
+
+
+# **3) Analysis**
+
+The complete analysis as reported in the manuscript
+
+```{r}
+
+```
+
