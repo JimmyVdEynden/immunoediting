@@ -1,44 +1,594 @@
 ---
-title: "Immunoediting"
-output: html_notebook
+title: "Lack of detectable neoantigen depletion signals in the untreated cancer genome"
+author: Jimmy Van den Eynden
+output: 
+  html_notebook:
+    number_sections: yes
+    toc: yes
+    toc_float: yes
 ---
 
-This notebook contains high level information on the pipeline that was used to create the results from the immunoediting analysis. 
+This notebook contains high level information on the pipeline that was used to create the results from *Van den Eynden J, Jiménez-Sánchez A, Miller ML and Larsson E. Lack of detectable neoantigen depletion signals in the untreated cancer genome. 2019.*
 
-# **1) Data download**
+Data used for the analysis as reported in the manuscript are available at ... .
 
-## TCGA mutation data
-
-```{r}
-
-```
+# Data download
 
 ## TCGA expression data
 
-## TCGA HLA normal .bam files
+Expression data from all cancer types were downloaded from the Broad Institute TCGA Genome Data Analysis Center (2016): Firehose stddata__2016_01_28 run. Broad Institute of MIT and Harvard. doi:10.7908/C11G0KM9. Expression data were fused in a single gene x sample matrix. See **downloads/TCGA/TCGA_mRNA.RData**.
 
-# **2) Data processing**
+## TCGA mutation data
 
-## GPPM objects
+Mutation data from all cancer types were downloaded as maf files from the TCGA GDC data portal on 2018/10/27 (MuTect2-called data, v7). See *downloads/TCGA/gdc_manifest.2017-10-27T18_00_58.436481.txt* for manifest file. Mutation data were fused in a single database, converted from hg38 to hg19 using liftover and annotated using ANNOVAR. Expression values of the gene containing the mutation was added from the expression data. See **downloads/TCGA/TCGA_maf_mutect2_v7.RData** for the resulting mutation database.
 
-```{r}
+## Other downloaded data
 
+All other downloaded data used in this study can be found in the folder **downloads/**. Download information is present in the subfolder containing the data.
+
+* **downloads/TCGA/**: Apart from mutation and expression data, this folder also containes TCGA manifest files with information on cancer types for each TCGA sample.
+* **downloads/allelefrequencies_net/**: Allele frequency information from the general population
+* **downloads/cosmic/**: Contains information on Cancer Gene Census v83 and Cosmic mutational signatures
+* **downloads/firecloud/**: HLA region BAM files, downloaded from Firecloud
+* **downloads/HGNC/**: List of coding genes derived from HGNC
+* **downloads/MC3/**: MC3 TCGA mutation callls
+* **downloads/MSigDB/**: Gene Ontology symbols v6.2, used for gene set enrichment analysis
+* **downloads/IEDB/**: IEDB epitope data, derived from synapse id syn11935058
+
+
+# Data processing
+
+## GPPM object
+
+GPPM objects are are Genomic Position objects that contain genomic information for every possible point mutation in the complete exome. They are first determined for each gene (stored at *temp/GPPM/*) and then fused in a single file (stored at *temp/GPPM_all.rds*). 
+
+Finally, wild-type HLA affinities are determined for the "prototypical HLA genotype", i.e. 3x2 most common HLA alleles (A02:01, A01:01, B07:02, B08:01, C07:01, C07:02; most common both in TCGA and amongst a Caucasian populations, see analysis) for each genomic position. The final object is stored as **data/GPPM_inclHLA.rds**. 
+
+### Determine GPPM object for each individual gene
+
+Genes that are not evaluable are saved to *log/GPPM_errorfile.txt*
+
+```{r,results='hide',eval=F}
+  # Specify genes (for all coding genes, this takes a long time (+/- 60h)!)
+  genes<- readRDS("data/HGNC_genes.rds") 
+  # Determine GPPM for each gene
+  source("scripts/create_GPPM.R")
 ```
 
-## HLA types
+### Fuse .rds data from all gene to 1 .rds file
 
-## HLA affinities
+```{bash,eval=F}
+  scripts/other/fuse_GPPM.sh
+```
 
-## Observed mutation data
+### Add HLA affinities 
+```{r,eval=F}
+  source("scripts/create_GPPM_wt.R")
+```
+
+### Get expected HLA binding regions per subst type 
+```{r,eval=F}
+  source("scripts/create_subst_type_matrix.R")
+```
+
+### Get amino information from GPPM: table of triNT x aa x variant
+```{r,eval=F}
+  source("scripts/create_aa_table.R")
+```
+
+### Get expected N & S sites for different genes. 
+```{r}
+  source("scripts/get_gene_NS_sites.R")
+  rm(list = ls())
+```
+
+### Create bed files and GRanges files for main HLA alleles (prototypical HLA genotype)
+```{r,eval=F}
+  source("scripts/GPMM_get_annotation.R")
+```
+
+### Select subset of GPPM to add all genotype-specific HLA affinities, including those from mutated peptides
+```{r,eval=F}
+  source("scripts/GPMM_subset_mut.R")
+```
+
+## HLA typing
+
+HLA typing was performed using polysolver, which used WES bam files as input. This was done as follows:
+
+* WES normal bam files from each available sample was accessed using Broad's firecloud, HLA regions in chromosome 6 were extracted and the resulting (splitted) bam files were downloaded
+* Polysolver was run on these bam files
+
+Output is stored as **data/TCGA_HLA_types.DRata**. *Please note that these data or any downstream data are not made available publicly because they are derived from protected TCGA data.*
+
+### Proces and download bam files from firecloud
+
+```{r, eval=FALSE}
+  source("scripts/get_bam_from_firecloud.R")
+```
+
+### Run polysolver
+
+Polysolver was run without prior HLA type frequency information. Duration +/- 10-15 mins/HLA type. A matrix is created which contains the 6 HLA alleles for each sample.
+
+Output is stored as **data/TCGA_HLA_types.RData**. Intermediate files are stored in *temp/polysolver/output/*. 
+
+```{bash, eval=FALSE}
+  scripts/other/run_polysolver_TCGA.sh
+```
+
+
+```{r, eval=FALSE}
+  # Bring polysolver output in 1 sample x HLA_allele matrix 
+  source("scripts/get_TCGA_HLA_types_from_polysolver.R")
+```
+
+## Observed (TCGA) mutation data
+
+The observed mutation database was created as follows:
+
+* All indels were excluded and only variables used in the study were selected
+* Information regarding main substitution types and trinucleotide substition types was added
+* HLA types (6 HLA alleles) were added
+* For each mutation, the 9 different wild type and mutated nonapeptides were added
+* Wild type and mutated HLA affinities were determined using netMHCPan3.0 and added for each allele 
+
+Output is stored as **data/TCGA_maf.rds**. 
+
+```{r, eval=FALSE}
+  source("scripts/create_TCGA_maf_HLA_obs.R")
+```
+
+HLA affinities were seperately determined for the main/prototypical HLA genotype (i.e. most frequent HLA alleles) and stored as **data/TCGA_maf_obs_mainHLAType.rds**
+
+```{r, eval=FALSE}
+  source("scripts/add_mainHLAType_to_maf_obs.R")
+```
+
+Rank-based HLA affinities for the main/prototypical HLA genotype (i.e. most frequent HLA alleles) were determined and stored as **data/TCGA_maf_ranks.rds**
+
+```{r, eval=FALSE}
+  source("scripts/get_TCGA_maf_HLA_ranks_obs.R")
+```
 
 ## Simulated mutation data
 
+The simulated mutation data is created as follows:
 
-# **3) Analysis**
+* Information regarding sample id, cancer, main substition type and trinucleotide substitution type was extracted from the observed mutation data
+* HLA alleles were randomly shuffled between samples and added to the data
+* For each trinucleotide substition type, a random mutation was sampled from the same type, using data from **data/GPPM_inclHLA.rds**
+* Further processing was exactly the same as for the observed mutation data  
+
+Output is stored as **data/TCGA_maf_sim.rds**. 
+
+```{r, eval=FALSE}
+  source("scripts/create_TCGA_maf_HLA_sim.R")
+```
+
+HLA affinities were seperately determined for the main/prototypical HLA genotype (i.e. most frequent HLA alleles) and stored as **data/TCGA_maf_sim_mainHLAType.rds**
+
+```{r, eval=FALSE}
+  source("scripts/add_mainHLAType_to_maf_sim.R")
+```
+
+Rank-based HLA affinities for the main/prototypical HLA genotype (i.e. most frequent HLA alleles) were determined and stored as **data/TCGA_maf_sim_ranks.rds**
+
+```{r, eval=FALSE}
+  source("scripts/get_TCGA_maf_HLA_ranks_sim.R")
+```
+
+
+## IEDB epitope annotation
+
+A list of known epitopes, derived from https://www.synapse.org/; id syn11935058, was mapped to the human genome.
+ 
+Output is stored as **data/IEDB_epitopes_gr.rds**
+
+```{r,eval=F}
+  source("scripts/map_IEDB_epitopes_to_hg19.R"")
+```
+
+Also get SSB7 substitution type information from the same folder.
+
+```{r}
+  source("scripts/create_triNT_SSB7_conversion_vector.R")
+```
+
+
+## Other
+
+### Random peptide HLA affinities
+
+Get HLA affinities for a set of random peptides
+
+```{r}
+source("scripts/create_random_nonapeptides_HLA.R")
+```
+
+
+# Analysis
 
 The complete analysis as reported in the manuscript
 
+## Annotation of HLA-binding regions in the human genome (*Figure 1*) 
+
+### Main analysis
+
+#### HLA-binding annotation of the human genome
+
 ```{r}
+  # Uses GPPM object, takes some time +/- 30 mins!
+  fig_nr<- "1"
+  source("scripts/manuscript_HLA_annotation.R")
+  rm(list = ls())
+```
+
+
+### Suppl. analysis
+
+#### Description of mutation data (including meaning of abbreviations). 
+
+This script generates **table S1**.
+
+```{r}
+  fig_nr<- "1_S_overview"
+  source("scripts/manuscript_overview_data.R")
+  rm(list = ls())
+```
+
+#### Determination of most freq. HLA alleles in population and in TCGA
+
+```{r}
+  fig_nr<- "1_S"
+  source("scripts/manuscript_HLA_AF.R")
+  rm(list = ls())
+```
+
+## Analysis of somatic mutations in the HLA-binding annotated genome: HBMR calculations (*Figure 2*)
+
+HBMR (HLA-binding mutation ratio) is the ratio between the non-synonymous mutation rate (i.e. n/s) in HLA-binding regions over non-binding regions.
+
+### Main analysis
+
+#### Calculation of observed HBMR values
+```{r}
+  fig_nr<- "2"
+  source("scripts/manuscript_obs_wt.R")
+  rm(list = ls())
+```
+
+#### Calculation of simulated HBMR values
+```{r}
+  fig_nr<- "2"
+  source("scripts/manuscript_sim_wt.R")
+  rm(list = ls())
+```
+
+#### Comparison of observed and simulated HBMR values
+```{r}
+  fig_nr<- "2"
+  source("scripts/manuscript_obs_vs_sim_wt.R")
+  rm(list = ls())
+```
+
+### Supplementary analysis
+
+#### Suppl. analysis: HBMR power analysis
+```{r}
+  fig_nr<- "2_S"
+  source("scripts/manuscript_HBMR_powerAnalysis.R")
+  rm(list = ls())
+```
+#### Suppl. analysis: IEDB epitope analysis 
+```{r}
+  # Uses GPPM object, takes some time, +/- 0.5hr!
+  fig_nr<- "2_S"
+  source("scripts/manuscript_IEDB.R")
+  rm(list = ls())
+```
+
+#### Suppl. analysis: validation of simulation approach
+```{r}
+  fig_nr<- "2_S"
+  source("scripts/manuscript_sim_wt_validation.R"  )
+  rm(list = ls())
+```
+
+#### Suppl. analysis: sample-specific HLA alleles
+```{r}
+  fig_nr<- "2_S_specificHLATypes"
+  HLAType<- "specific"
+  # Observation
+  source("scripts/manuscript_obs_wt.R")
+  # Simulation
+  source("scripts/manuscript_sim_wt.R")
+  # Compare
+  source("scripts/manuscript_obs_vs_sim_wt.R")
+  rm(list = ls())
+```
+
+#### Suppl. analysis:  use best binder from 6 alleles rather than harm mean 
+```{r}
+  fig_nr<- "2_S_bestBinder"
+  HLA_method<- "bestBinder"
+  # Observation
+  source("scripts/manuscript_obs_wt.R")
+  # Simulation
+  source("scripts/manuscript_sim_wt.R")
+  # Compare
+  source("scripts/manuscript_obs_vs_sim_wt.R")
+  rm(list = ls())
+```
+
+#### Suppl. analysis: use Kd cut-off of 50nM, rather than 500nM 
+```{r}
+  fig_nr<- "2_S_KdCu50"
+  Kd_cu<- 50
+  # Observation
+  source("scripts/manuscript_obs_wt.R")
+  # Simulation
+  source("scripts/manuscript_sim_wt.R")
+  # Compare
+  source("scripts/manuscript_obs_vs_sim_wt.R")
+  rm(list = ls())
+```
+
+#### Suppl. analysis: use Rank-based analys with cut-off 1%  
+```{r}
+  fig_nr<- "2_S_Rank1pct"
+  HLA_method<- "rank_harmonic_mean"
+  Kd_cu<- 1
+  # Observation
+  source("scripts/manuscript_obs_wt.R")
+  # Simulation
+  source("scripts/manuscript_sim_wt.R")
+  # Compare
+  source("scripts/manuscript_obs_vs_sim_wt.R")
+  rm(list = ls())
+```
+
+#### Suppl. analysis: use driver gene filter (i.e. exclude driver genes)  
+```{r}
+  fig_nr<- "2_S_driverGeneExclusion"
+  driver_genes<- readRDS("downloads/cosmic/CGC_v83.rds")
+  # Observation
+  source("scripts/manuscript_obs_wt.R")
+  # Simulation
+  source("scripts/manuscript_sim_wt.R")
+  # Compare
+  source("scripts/manuscript_obs_vs_sim_wt.R")
+  rm(list = ls())
+```
+
+#### Suppl. analysis: use expression filter (i.e. exclude mutations from non-expressed genes)  
+```{r}
+  fig_nr<- "2_S_exprFilter"
+  expr_cu<- 0
+  # Observation
+  source("scripts/manuscript_obs_wt.R")
+  # Simulation
+  source("scripts/manuscript_sim_wt.R")
+  # Compare
+  source("scripts/manuscript_obs_vs_sim_wt.R")
+  rm(list = ls())
+```
+
+#### Suppl. analysis: mutations in expressed vs non-expressed genes 
+```{r}
+  fig_nr<- "2_S_expr_analysis"
+  expr_cu<- 0
+  source("scripts/manuscript_expr_analysis.R")
+  rm(list = ls())
+```
+
+## Correlation between trinucleotide subst. types and HLA-binding properties (*Figure 3*) 
+
+### Main analysis
+
+#### Effect of triNT subst. types on HBMR
+
+```{r}
+  # Uses GPPM object, takes some time +/- 30 mins!
+  fig_nr<- "3"
+  source("scripts/manuscript_cor_triNT_HBMR.R")
+  rm(list = ls())
+```
+
+#### Effect of triNT subst. types on on probability of syn. and non-syn. mut. to hit hydrophobic/polar/charged amino acids
+
+```{r}
+  byCancer<- F
+  fig_nr<- "3"
+  source("scripts/manuscript_cor_HBMR_aaProbs.R")
+  rm(list = ls())
+```
+
+#### Effect of the number of amino acids on the HLA affinity
+
+Using random best binding nonapeptides (out of 9) from any possible exome location
+
+```{r}
+  fig_nr<- "3"
+  runIndividualPeptides<- F
+  source("scripts/manuscript_logreg_aa_HLABinder.R")
+  rm(list = ls())
+```
+
+### Suppl. analysis
+
+#### Suppl. analysis: Correlation triNT HBMR & proportion triNT per cancer
+
+```{r}
+  fig_nr<- "3_S"
+  source("scripts/manuscript_triNT_cancer_rankedHBMR.R")
+  rm(list = ls())
+```
+
+#### Supppl. analysis: prop. TCN>TNN & cancer-specific HBMR
+
+```{r}
+  fig_nr<- "3_S"
+  source("scripts/manuscript_cor_cancerTC_HBMR.R")
+  rm(list = ls())
+```
+
+#### Suppl. analysis: Expected HBMR in cosmic ms signatures
+
+```{r}
+  fig_nr<- "3_S"
+  source("scripts/manuscript_HBMR_cosmicMS.R")
+  rm(list = ls())
+```
+
+#### Suppl. analysis: correlation cancer & aa classes
+
+```{r}
+  byCancer<- T
+  fig_nr<- "3_S"
+  source("scripts/manuscript_cor_HBMR_aaProbs.R")
+  # Ignore warning. This is related to colour scale and has no influence on results as such.
+  rm(list = ls())
+```
+
+#### Suppl. analysis: Effect of the number of amino acids on the HLA affinity
+
+Using completely random peptides
+
+```{r}
+  fig_nr<- "3_S"
+  runIndividualPeptides<- T
+  source("scripts/manuscript_logreg_aa_HLABinder.R")
+  # Ignore warning. This is related to colour scale and has no influence on results as such.
+  rm(list = ls())
+```
+
+
+## Normalized HBMR analysis (*Figure 4*)
+
+### Main
+
+#### HBMR normalized
+```{r}
+  fig_nr<- "4"
+  source("scripts/manuscript_HBMR_normalized.R")
+  rm(list = ls())
+```
+
+### Suppl. analysis
+
+#### HBMR normalized, alternative parameters
+```{r}
+  # Observations
+  useSim<- F
+  fig_nr<- "4_S"
+  source("scripts/manuscript_HBMR_normalized_alt.R")
+  rm(list = ls())
+  # Simulations
+  useSim<- T
+  fig_nr<- "4_S"
+  source("scripts/manuscript_HBMR_normalized_alt.R")
+  rm(list = ls())
+```
+
+#### Suppl. analysis: Calculate dN/dS 
+```{r}
+  fig_nr<- "4_S"
+  source("scripts/manuscript_dNdS.R")
+  rm(list = ls())
+```
+
+
+## Rsim (i.e. dNHLA/dNnonHLA) analysis (*Figure 5*)
+
+### Main
+
+```{r}
+  fig_nr<- "5"
+  useSimulated_data<- FALSE
+  source("scripts/manuscript_Rsim_HLASpecific.R")
+  rm(list = ls())
+```
+
+### Suppl. analysis
+
+#### Rsim for simulated data
+
+```{r}
+  # Other HLA genotypes than observed
+  fig_nr<- "5_S"
+  useSimulated_data<- TRUE
+  source("scripts/manuscript_Rsim_HLASpecific.R")
+  rm(list = ls())
+```
+
+#### Rsim power analysis
+```{r}
+  fig_nr<- "5_S"
+  source("scripts/manuscript_Rsim_powerAnalysis.R")
+  rm(list = ls())
+```
+
+#### Correlation mut and wt for specific HLA gentype
+
+```{r}
+  fig_nr<- "5_S"
+  source("scripts/manuscript_wt_vs_mut.R")
+  rm(list = ls())
+```
+
+#### Suppl. analysis: Summary table of HBMR & dNHLA/dNnonHLA
+
+```{r}
+  # Observations
+  useSimulated_data<- FALSE
+  source("scripts/manuscript_summarize_results.R")
+  rm(list = ls())
+  # Simulations
+  useSimulated_data<- TRUE
+  source("scripts/manuscript_summarize_results.R")
+  rm(list = ls())
 
 ```
+
+Plot Rsim wt-mut-specific HLA
+
+```{r}
+  useSimulated_data<- FALSE
+  fig_nr<- "5_S_obs"
+  source("scripts/manuscript_plot_Rsim_all.R")
+  rm(list = ls())
+  useSimulated_data<- TRUE
+  fig_nr<- "5_S_sim"
+  source("scripts/manuscript_plot_Rsim_all.R")
+  rm(list = ls())
+```
+
+Summary table
+
+```{r}
+  # HBMR
+  load("results/data/summary_results.RData")
+  HBMR_obs<- HBMR_sum
+  load("results/data/summary_results_sim.RData")
+  HBMR_sim<- HBMR_sum
+  HBMR<- cbind(HBMR_obs,HBMR_sim[,-1])
+  
+  # Rsim
+  load("results/data/summary_results.RData")
+  Rsim_sample_obs<- results_t_sample
+  Rsim_cancer_obs<- results_t_can
+  load("results/data/summary_results_sim.RData")
+  Rsim_sample_sim<- results_t_sample
+  Rsim_cancer_sim<- results_t_can
+  
+  samples_common<- intersect(rownames(Rsim_sample_obs),rownames(Rsim_sample_sim))
+  Rsim_sample<- cbind(Rsim_sample_obs[samples_common,],Rsim_sample_sim[samples_common,])
+  Rsim_cancer<- cbind(Rsim_cancer_obs,Rsim_cancer_sim)
+  
+  WriteXLS::WriteXLS(c("HBMR","Rsim_sample","Rsim_cancer"),ExcelFileName = "results/tables/table_S2.xlsx",SheetNames = c("HBMR","dNHLA_dNnonHLA_sample","dNHLA_dNnonHLA_cancer"),row.names = T)
+  
+  rm(list = ls())
+```
+
 

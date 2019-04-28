@@ -41,7 +41,7 @@ subst_type3<- get_subst_types(maf_MC3$Chromosome,maf_MC3$Start_Position,maf_MC3$
 maf_MC3<- cbind(maf_MC3,subst_type3,stringsAsFactors=F)
 
 # Add cancer information from TCGA manifest
-load("../downloads/TCGA/TCGA_manifest.RData")
+load("../data/TCGA_manifest.RData")
 maf_MC3$Tumor_Sample_Barcode<- substr(maf_MC3$Tumor_Sample_Barcode,1,15)
 maf_MC3$Cancer<- TCGA_cancer_id[maf_MC3$Tumor_Sample_Barcode,1]
 
@@ -61,8 +61,7 @@ saveRDS(maf_GP,file = "downloads/maf_MC3_GP.rds")
 # Add HLA annotation to mutation data
 
 ```{r}
-
-# maf_GP<- readRDS(file = "downloads/maf_MC3_GP.rds")
+maf_GP<- readRDS(file = "downloads/maf_MC3_GP.rds")
 
 # Load GRanges files containing information on all annotated regions
 load("../data/annotation_gr.RData")
@@ -74,16 +73,21 @@ maf_GP_HLA_idx<- findOverlaps(maf_GP,annotation_gr_HLA_Mean,ignore.strand=T)
 maf_GP$isHA<- (1:length(maf_GP))%in%queryHits(maf_GP_HLA_idx)
 maf_GP$isHA[!(1:length(maf_GP))%in%queryHits(maf_GP_present_idx)]<- NA # Remove CDS position with no information
 cat("HLA-binding mutations: ", 100*signif(mean(maf_GP$isHA,na.rm=T),3),"%"," \n")
+
+# Save
+saveRDS(maf_GP,file = "downloads/maf_MC3_GP_annotated.rds")
 ```
 
-# Calculate metrics
+# HBMR metric
 
 ```{r}
+# Load 
+maf_GP<- readRDS(file = "downloads/maf_MC3_GP_annotated.rds")
 
 # Calculate for cancers studied in the manuscript.
 cancers<- sort(c('BRCA','COADREAD','LUAD','OV','HNSC','UCEC','LUSC','PRAD','LGG','STAD','SKCM','GBM','BLCA','LIHC','CESC','KIRP','SARC','PAAD','ESCA'))
 
-# HBMR metric
+# Calculate HBMR metric
 source("../scripts/functions/calculate_HBMR.R")
 subst_type_matrix_ls<- readRDS(file="../data/subst_type_matrix_ls.rds") # Expected mut per subst type
 HBMR<- calculate_HBMR(sample = maf_GP$Tumor_Sample_Barcode,
@@ -94,50 +98,16 @@ HBMR<- calculate_HBMR(sample = maf_GP$Tumor_Sample_Barcode,
                       cancer =  maf_GP$Cancer)[cancers,]
 HBMR<- HBMR[order(HBMR[,"HBMR_norm"]),] # Sort by HBMRnorm
 
-# dNHLA/dNnonHLA metric (shortly named Rsim here)
-source("../scripts/functions/calculate_Rsim2.R")
-subst_type_matrix<- readRDS(file="../data/subst_type_matrix_ls.rds")$triNT
-Rsim_ls<- calculate_Rsim2(sample = maf_GP$Tumor_Sample_Barcode,
-                        variant = maf_GP$Variant_Classification,
-                        isHA = maf_GP$isHA,
-                        subst_type3 = maf_GP$subst_type3,
-                        exp_mut = subst_type_matrix,
-                        cancer = maf_GP$Cancer)
-Rsim<- Rsim_ls[["Rsim"]]
-
-# Save metrics
-save(HBMR,Rsim,file="results/MC3_metrics.RData")
-```
-
-# Show plots
-
-## HBMR
-
-Barplot with HBMR and 95% CI for each cancer.
-
-```{r}
+# Plot
 bp<- barplot(HBMR[,"HBMR_norm"],las=2,ylab="Normalized HBMR",ylim=c(0,1.3),main="HBMR metric")
 arrows(bp,HBMR[,"HBMR_norm"],bp,HBMR[,"HBMR_norm_ciup"],lwd = 1.5, angle = 90,code = 2, length = 0.03,xpd=NA)    
 abline(h=1,lty=2)
 ```
 
-Boxplots show dNHLA/dNnonHLA ratios for each sample. P values indicated for cancers that were significantly different from 1 (Wilcoxon rank-sum test).
+Barplot with normalized HBMR and 95% CI for each cancer.
 
-## dNHLA/dNnonHLA metric
+# dNHLA/dNnonHLA metric
 
-```{r}
-source("../scripts/functions/cancer_cols.R")
-Rsim_med<- sort(tapply(Rsim,TCGA_cancer_id[names(Rsim),1],"median",na.rm=T)[cancers],decreasing = T)
-boxplot(Rsim~factor(TCGA_cancer_id[names(Rsim),1],levels = names(Rsim_med)),beside = T,las=2,outline=F,horizontal=T,frame.plot=F,col=c25[names(Rsim_med)],staplewex=0,notch=T,xlab="dNHLA/dNnonHLA",main="dNHLA/dNnonHLA metric \n (prototypical genotype using wild-type protein affinities)",ylim=c(0,2))
-Rsim_p<- tapply(Rsim,TCGA_cancer_id[names(Rsim),1],function(x) wilcox.test(x,mu = 1)$p.value)[names(Rsim_med)]
-Rsim_q<- p.adjust(Rsim_p,"fdr")
-if(sum(Rsim_q<0.1)!=0) text(rep(1.8,sum(Rsim_q<0.1)),which(Rsim_q<0.1),paste0("P=",signif(Rsim_p[which(Rsim_q<0.1)],0.3)),xpd=NA)
-abline(v=1,lty=2)
-```
-
-## Note about calculating dNHLA/dNnonHLA metric for genotype-specific affinities and/or mutated peptides
-
-Note that these values can also be calculated for genotype-specific and/or mutated peptide HLA affinities. This requires HLA genotyping of samples, prediction of mutated peptide affinities and calculation of expected ratios between HLA-binding and non-binding regions for each sample. See main code for more information or contact the corresponding author.
-
+This metric was developed to compare observed and expected HLA affinities for mutated peptides from each individual sample, considering its HLA genotype. This requires HLA genotyping of samples and prediction of mutated peptide affinities. Because HLA genotypes are derived from protected TCGA data, we are not allowed to make them available. For more information on how to use this metric see  *scripts/manuscript_Rsim_HLASpecific.R* or contact the corresponding author.
 
 

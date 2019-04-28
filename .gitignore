@@ -1,0 +1,20 @@
+# Only make markdown (code & html) and scripts available!
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.Rprofile
+data/
+downloads/
+log/
+packrat/
+raw/
+# readme.txt
+results/
+running_analysis_on_other_mutation_data/downloads/
+scratch/
+# scripts/
+scripts/arch/
+scripts/functions/arch/
+scripts/other/arch/
+temp/
