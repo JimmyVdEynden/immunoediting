@@ -1,8 +1,9 @@
-calculate_Rsim3<- function(sample,variant,isHA,subst_type3,exp_sites=NULL,exp_mut,cancer,isExpr=NULL){
+calculate_Rsim3<- function(sample,variant,isHA,subst_type3,exp_sites,exp_mut,cancer,isPentaNT=F){
   
   # 1. EXPECTED
   
-  if(is.null(exp_sites)) exp_sites<- exp_mut # If expected ubst matrix contains all sites
+  if(identical(exp_sites,exp_mut)) isSubset=F
+  else isSubset=F
   
   # Get ms per cancer & normalize by total n triNT sites
   subst_type_t<- table(cancer,subst_type3)
@@ -14,20 +15,22 @@ calculate_Rsim3<- function(sample,variant,isHA,subst_type3,exp_sites=NULL,exp_mu
   exp_nNonHLA_triNT<- exp_mut[,"nonsynonymous SNV","FALSE"]
   
   # Correct for the fact that previous numbers are based on 10000 equal sites and probabilities are not!!!
-  exp_nHLA_triNT<- exp_nHLA_triNT[names(n_triNT)]*n_triNT/10000   
-  exp_nNonHLA_triNT<- exp_nNonHLA_triNT[names(n_triNT)]*n_triNT/10000
+  if(isSubset){
+    if(isPentaNT){
+      n_pentaNT<- n_triNT
+      n_triNT<- tapply(n_pentaNT,paste0(substr(names(n_pentaNT),2,4),">",substr(names(n_pentaNT),8,10)),"sum")
+      n_triNT<- as.numeric(n_triNT[paste0(substr(names(n_pentaNT),2,4),">",substr(names(n_pentaNT),8,10))])
+      names(n_triNT)<- names(n_pentaNT)
+    }
+    exp_nHLA_triNT<- exp_nHLA_triNT[names(n_triNT)]*n_triNT/10000   
+    exp_nNonHLA_triNT<- exp_nNonHLA_triNT[names(n_triNT)]*n_triNT/10000
+  }
   
   # Get expected propHLA per cancer
   exp_ratioHLA<- colSums(exp_nHLA_triNT*t(ms_cancer[,names(exp_nHLA_triNT)]))/colSums(exp_nNonHLA_triNT*t(ms_cancer[,names(exp_nNonHLA_triNT)]))
   
   # 2. OBSERVED  
-  if(!is.null(isExpr)){
-    sample<- sample[isExpr]
-    variant<- variant[isExpr]
-    isHA<- isHA[isExpr]
-    subst_type3<- subst_type3[isExpr]
-  }
-  
+
   # Create table with mutation information for each sample
   sample_t<- table(sample,variant,isHA)
   sample_t<- cbind(sample_t[,c("nonsynonymous SNV","synonymous SNV"),"TRUE"],sample_t[,c("nonsynonymous SNV","synonymous SNV"),"FALSE"])

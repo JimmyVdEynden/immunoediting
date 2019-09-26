@@ -7,8 +7,14 @@
 # load
 #######
 {
-  if(useSimulated_data) load("results/data/summary_results_sim.RData")
-  else load("results/data/summary_results.RData")  
+  if(exists("usePentaData")&&usePentaData){
+    if(useSimulated_data) load("results/data/summary_results_pentaNT_sim.RData")
+    else load("results/data/summary_results_pentaNT.RData")  
+  }
+  else{
+    if(useSimulated_data) load("results/data/summary_results_sim.RData")
+    else load("results/data/summary_results.RData")  
+  }
   source("scripts/functions/cancer_cols.R")
 }
 

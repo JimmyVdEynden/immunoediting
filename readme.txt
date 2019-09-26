@@ -5,7 +5,7 @@ Source code used to produce the results as reported in the manuscript.
 
 The entire pipeline is described in the R markdown notebook "immunoediting.Rmd" (and html "immunoediting.nb.html", which also contains some core results). 
 
-After downloading data available at ... data/ folder, running section 3 ("Analysis") will produce all figures, tables, ... as reported in the manuscripts. We recommend not to run section 2 ("Data processing") as such due to long processing times.    
+After downloading data available at Zenodo 10.5281/zenodo.2621365 in data/ folder, running section 3 ("Analysis") will produce all figures, tables, ... as reported in the manuscripts. We recommend not to run section 2 ("Data processing") as such due to long processing times.    
 
 Note that we are not allowed to make protected TCGA data or any downstream data available. Concretely this implies that the files data/TCGA_maf.rds & data/TCGA_HLA_types.RData are not provided and any script depending in this file will return an error.
 

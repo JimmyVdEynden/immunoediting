@@ -17,7 +17,7 @@
 # exp_mut_ls = subst_type_matrix_ls_perSample
 # cancer = TCGA_maf$Cancer
 
-calculate_Rsim_HLASpecific<- function(sample,variant,isHA,subst_type3,exp_mut,exp_mut_ls,cancer,isExpr=NULL){
+calculate_Rsim_HLASpecific<- function(sample,variant,isHA,subst_type3,exp_mut,exp_mut_ls,cancer,isPentaNT=F){
   
   # 1. EXPECTED RATIO
   
@@ -39,6 +39,12 @@ calculate_Rsim_HLASpecific<- function(sample,variant,isHA,subst_type3,exp_mut,ex
   exp_nNonHLA_triNT_matrix<- sapply(exp_mut_ls,function(x) x[,"nonsynonymous SNV","FALSE"])
 
   # Correct for the fact that previous numbers are based on 10000 equal sites and probabilities are not!!!
+  if(isPentaNT){
+    n_pentaNT<- n_triNT
+    n_triNT<- tapply(n_pentaNT,paste0(substr(names(n_pentaNT),2,4),">",substr(names(n_pentaNT),8,10)),"sum")
+    n_triNT<- as.numeric(n_triNT[paste0(substr(names(n_pentaNT),2,4),">",substr(names(n_pentaNT),8,10))])
+    names(n_triNT)<- names(n_pentaNT)
+  }
   exp_nHLA_triNT_matrix<- exp_nHLA_triNT_matrix[names(n_triNT),]*n_triNT/10000   
   exp_nNonHLA_triNT_matrix<- exp_nNonHLA_triNT_matrix[names(n_triNT),]*n_triNT/10000
 
@@ -55,13 +61,7 @@ calculate_Rsim_HLASpecific<- function(sample,variant,isHA,subst_type3,exp_mut,ex
   names(exp_ratioHLA)<- common_samples
 
   # 2. OBSERVED RATIO 
-  if(!is.null(isExpr)){
-    sample<- sample[isExpr]
-    variant<- variant[isExpr]
-    isHA<- isHA[isExpr]
-    subst_type3<- subst_type3[isExpr]
-  }
-  
+
   # Create table with mutation information for each sample
   sample<- substr(sample,1,12)
   sample_t<- table(sample,variant,isHA)

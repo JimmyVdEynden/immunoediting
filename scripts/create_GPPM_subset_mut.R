@@ -177,26 +177,70 @@ for(i in 1:nrow(TCGA_HLA_types_sim)){
 names(subst_type_matrix_sim_ls)<- substr(rownames(TCGA_HLA_types_sim),1,12)
 saveRDS(subst_type_matrix_sim_ls,file="data/GPPM_subset_subst_type_matrix_sim_mut_per_sample.rds")
 
-# Calculate expected wt/mut for prototypical HLA type 
-#####################################################
+# Calculate for pentaNT
+########################
+{
+  # Load
+  GPPM_mut<- readRDS(file = "data/GPPM_subset_mut.rds")
+  aff_mut<- readRDS(file = "temp/GPPM_subset_aff_mut.rds")
+  load("data/TCGA_HLA_types.RData")
+  source("scripts/functions/harmonic_mean.R")
+  
+  # Get pentanucleotides
+  source("scratch/get_subst_types5.R")
+  chr<- as.character(seqnames(GPPM_mut))
+  pos<- pos(GPPM_mut)
+  alt_allele<- as.character(GPPM_mut$alt)
+  GPPM_mut$subst_type5<- get_subst_types5(chr = chr,pos = pos,alt_allele = alt_allele)
+  
+  # Calculate subst matrix per sample
+  subst_type5_matrix_ls<- list()
+  for(i in 1:nrow(TCGA_HLA_types_netMHC)){
+    # for(i in 1:10){
+    cat(i," ")
+    HLA_temp<- TCGA_HLA_types_netMHC[i,]
+    # Identify HLA type
+    col_idx<- match(HLA_temp,colnames(aff_mut)) # Identify HLA type
+    # Get affinity
+    mean_aff_temp<- apply(aff_mut[,col_idx],1,harmonic_mean)
+    # Get subst type5
+    subst_type5_matrix<- table(GPPM_mut$subst_type5,GPPM_mut$variant,mean_aff_temp<500)
+    # Add to list
+    subst_type5_matrix_ls[[i]]<- subst_type5_matrix
+    # Save from time to time
+    if(i%%1000==0) saveRDS(subst_type5_matrix_ls,file="temp/GPPM_subset_subst_type_matrix5_mut_per_sample.rds")
+  }
+  names(subst_type5_matrix_ls)<- rownames(TCGA_HLA_types_netMHC)
+  saveRDS(subst_type5_matrix_ls,file="data/GPPM_subset_subst_type_matrix5_mut_per_sample.rds")
+}
 
-aff_mut<- readRDS(file = "temp/GPPM_subset_aff_mut.rds")
-
-# observed
-
-# Simulated
-TCGA_maf_sim<- readRDS("data/TCGA_maf_sim.rds")
-main_HLA_type<- c("HLA-A02:01","HLA-A01:01","HLA-B07:02","HLA-B08:01","HLA-C07:01","HLA-C07:02") 
-
-subst_type_matrix_main_sim_ls<- list()
-HLA_temp<- main_HLA_type
-col_idx<- match(HLA_temp,colnames(aff_mut)) 
-# Harmonic mean
-mean_aff_temp<- apply(aff_mut[,col_idx],1,harmonic_mean)
-subst_type_matrix_main_sim_ls$Kd500<- table(GPPM_mut$subst_type3,GPPM_mut$variant,mean_aff_temp<500)
-subst_type_matrix_main_sim_ls$Kd50<- table(GPPM_mut$subst_type3,GPPM_mut$variant,mean_aff_temp<50)
-# Best binder
-best_aff_temp<- apply(aff_mut[,col_idx],1,rowMins)
-subst_type_matrix_main_sim_ls$best_binder<- table(GPPM_mut$subst_type3,GPPM_mut$variant,min_aff_temp<500)
-
-
+# Calculate for pentaNT (simulated data)
+########################################
+{
+  # Simulated HLA genotypes
+  TCGA_maf_sim<- readRDS("data/TCGA_maf_sim.rds")
+  TCGA_HLA_types_sim<- TCGA_maf_sim[,c("Tumor_Sample_Barcode","HLA-A1","HLA-A2","HLA-B1","HLA-B2","HLA-C1","HLA-C2")]
+  TCGA_HLA_types_sim<- TCGA_HLA_types_sim[!duplicated(TCGA_HLA_types_sim$Tumor_Sample_Barcode),]
+  rownames(TCGA_HLA_types_sim)<- substr(TCGA_HLA_types_sim[,1],1,12)
+  TCGA_HLA_types_sim<- TCGA_HLA_types_sim[,-1]
+  
+  # Calculate subst matrix per sample
+  subst_type5_matrix_sim_ls<- list()
+  for(i in 1:nrow(TCGA_HLA_types_sim)){
+    # for(i in 1:10){
+    cat(i," ")
+    HLA_temp<- TCGA_HLA_types_sim[i,]
+    # Identify HLA type
+    col_idx<- match(HLA_temp,colnames(aff_mut)) # Identify HLA type
+    # Get affinity
+    mean_aff_temp<- apply(aff_mut[,col_idx],1,harmonic_mean)
+    # Get subst type5
+    subst_type5_matrix<- table(GPPM_mut$subst_type5,GPPM_mut$variant,mean_aff_temp<500)
+    # Add to list
+    subst_type5_matrix_sim_ls[[i]]<- subst_type5_matrix
+    # Save from time to time
+    if(i%%1000==0) saveRDS(subst_type5_matrix_sim_ls,file="temp/GPPM_subset_subst_type_matrix5_mut_per_sample_sim.rds")
+  }
+  names(subst_type5_matrix_sim_ls)<- rownames(TCGA_HLA_types_sim)
+  saveRDS(subst_type5_matrix_sim_ls,file="data/GPPM_subset_subst_type_matrix5_mut_per_sample_sim.rds")
+}

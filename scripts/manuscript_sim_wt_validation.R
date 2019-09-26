@@ -38,3 +38,22 @@ for(i in 1:2){
   legend("topright",fill=c("black","grey"),legend=c("Observed","Simulated"),bty="n")
   dev.off()
 }
+
+# Compare variants
+##################
+{
+  TCGA_maf_obs_var_t<- table(TCGA_maf$Variant_Classification)
+  TCGA_maf_sim_var_t<- table(TCGA_maf_sim$Variant_Classification)
+  TCGA_maf_obs_var_prop_t<- prop.table(TCGA_maf_obs_var_t)
+  TCGA_maf_sim_var_prop_t<- prop.table(TCGA_maf_sim_var_t)
+  
+  # Plot
+  for(i in 1:2){
+    if(i==1) svglite(paste0("results/figs/svg/fig",fig_nr,"_validate_sims_variants.svg"),width = 20)
+    else pdf(paste0("results/figs/pdf/fig",fig_nr,"_validate_sims_variants.pdf"),width = 14)
+    par(mfrow=c(1,2))
+    pie(TCGA_maf_obs_var_prop_t,main="Observed mutations",col=c("blue","red","grey"),labels = paste0(names(TCGA_maf_obs_var_prop_t)," (",round(100*TCGA_maf_obs_var_prop_t,1),"%)"),xpd=NA)
+    pie(TCGA_maf_sim_var_prop_t,main="Simulated mutations",col=c("blue","red","grey"),labels = paste0(names(TCGA_maf_sim_var_prop_t)," (",round(100*TCGA_maf_sim_var_prop_t,1),"%)"),xpd=NA)
+    dev.off()
+  }
+}

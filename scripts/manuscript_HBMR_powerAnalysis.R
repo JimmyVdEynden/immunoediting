@@ -204,6 +204,55 @@ TCGA_maf_can_t<- table(TCGA_maf$Cancer,TCGA_maf$Variant_Classification)
   }
 }
 
+# Calculate amount of negative selection for given mutation burden (and cancer type)
+####################################################################################
+{
+  propHLA<- 0.221 # From HLA annotation (cfr fig.1)
+  negSelSim<- as.character(seq(0.8,1,0.001))
+  purSel_n<- rep(NA,length(negSelSim))
+  names(purSel_n)<- negSelSim
+  
+  prop_n<- prop.table(colSums(TCGA_maf_can_t))["nonsynonymous SNV"]
+  prop_s<- prop.table(colSums(TCGA_maf_can_t))["synonymous SNV"]
+
+  for(trueNegSel in names(purSel_n)){
+    propNonHLA<- (1-propHLA) 
+    propHLA_sim<- propHLA/(propHLA+(propNonHLA/as.numeric(trueNegSel))) # Proportion HLA after selection
+    prop_n_sim<- prop_n/(prop_n+(prop_s/as.numeric(trueNegSel))) # Proportion non-syn after selection
+    ss_tmp<- ss2x2(p0 = propHLA,p1 = propHLA_sim,n1.over.n0 = prop_n_sim/prop_s,approx = T)
+    purSel_n[trueNegSel]<- ss_tmp$n0+ss_tmp$n1
+  }
+    
+  for(i in 1:2){
+    if(i==1) svglite(paste0("results/figs/svg/fig",fig_nr,"_HBMR_Power_n_vs_purSel.svg"))
+    else pdf(paste0("results/figs/pdf/fig",fig_nr,"_HBMR_Power_n_vs_purSel.pdf"))
+    plot(log10(purSel_n),100*(1-as.numeric(names(purSel_n))),xlim=c(4,6),xlab="# mutations",ylab="Detectable amount of immunogenic purifying selection(%)",type="l",axes=F)
+    axis(1,at=c(4,5,6),labels = format(c(1e+04,1e+05,1e+06),scientific = T))
+    axis(2)
+    cancers<- rownames(TCGA_maf_can_t)[rowSums(TCGA_maf_can_t)>10000]
+    purSel_n_can_matrix<- matrix(NA,length(cancers),2,dimnames = list(cancers,c("n","purSel")))
+    for(cancer in cancers){
+      # Get mut burden
+      n_mut_tmp<- rowSums(TCGA_maf_can_t)[cancer]
+      # Get pursel given mut burden
+      purSel_tmp<- 100*(1-as.numeric(names(which((abs(purSel_n-n_mut_tmp))==min(abs(purSel_n-n_mut_tmp),na.rm=T)))))
+      purSel_n_can_matrix[cancer,]<- c(n_mut_tmp,purSel_tmp)
+      # Add point
+      points(log10(n_mut_tmp),purSel_tmp,pch=16,col=c25[cancer])
+    }
+    purSel_n_can_matrix<- purSel_n_can_matrix[order(purSel_n_can_matrix[,"n"]),]
+    # Highest power
+    if(i==1){
+      cat("Highest power: ", rownames(purSel_n_can_matrix)[nrow(purSel_n_can_matrix)], purSel_n_can_matrix[nrow(purSel_n_can_matrix),],"\n")
+      cat("Lowest power: ", rownames(purSel_n_can_matrix)[1], purSel_n_can_matrix[1,],"\n")
+      # Highest power:  UCEC 488042 2.1 
+      # Lowest power:  KIRP 12196 12.8 
+    }
+    dev.off()
+  }
+}
+
+
 # Save results
 ##############
 {

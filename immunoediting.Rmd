@@ -503,6 +503,14 @@ Using completely random peptides
 
 ### Main
 
+#### Concept
+```{r}
+  fig_nr<- "5"
+  source("scripts/manuscript_Rsim_concept.R")
+  rm(list = ls())
+```
+
+#### Analysis
 ```{r}
   fig_nr<- "5"
   useSimulated_data<- FALSE
@@ -591,4 +599,44 @@ Summary table
   rm(list = ls())
 ```
 
+#### Suppl. analysis: empirical approach (Remp)
 
+```{r}
+  fig_nr<- "5_S"
+  source("scripts/manuscript_Remp.R")
+  rm(list = ls())
+```
+
+#### Correlation cytolytic activity
+```{r}
+  fig_nr<- "5_S"
+  source("scripts/manuscript_cor_CYT.R")
+  rm(list = ls())
+```
+
+#### dNHLA/dNnonHLA using pentaNT
+```{r}
+  # Observations
+  useSimulated_data<- FALSE
+  source("scripts/manuscript_summarize_results_pentaNT.R")
+  rm(list = ls())
+  # Simulations
+  useSimulated_data<- TRUE
+  source("scripts/manuscript_summarize_results_pentaNT.R")
+  rm(list = ls())
+```
+
+Plot Rsim pentaNT wt-mut-specific HLA
+
+```{r}
+  usePentaData<- T
+  useSimulated_data<- FALSE
+  fig_nr<- "5_S_obs_pentaNT"
+  source("scripts/manuscript_plot_Rsim_all.R")
+  rm(list = ls())
+  usePentaData<- T
+  useSimulated_data<- TRUE
+  fig_nr<- "5_S_sim_pentaNT"
+  source("scripts/manuscript_plot_Rsim_all.R")
+  rm(list = ls())
+```

@@ -128,9 +128,10 @@
   }
 }
 
-# 2) nHP AA in each group?
-###########################
+# 2) %HP AA & %HLA binding in each group?
+###########################################
 {
+  # % HP
   GPPM_aa_t<- readRDS("data/GPPM_gene_aa_t.rds")
   load("data/aa_classes.RData")
   GPPM_aa_t_propHP<- rowSums(GPPM_aa_t[,aa_hp])/rowSums(GPPM_aa_t)
@@ -157,6 +158,41 @@
     axis(1)
     boxplot(propHP_expr_ls,horizontal=T,outline=F,ylim=c(0.3,0.7),axes=F)  
     axis(1)
+    dev.off()
+  }
+  
+  # % HLA binding 
+  # Non-expr
+  for(i in 1:10){
+    genes_sel<- unlist(strsplit(as.character(GSEA_nonExpr_GO[i,"genes"]),","))
+    # cat(mean(TCGA_maf[TCGA_maf$Hugo_Symbol%in%genes_sel,"isHA_wt"])) # 44.1%
+    if(i==1) propHA_nonExpr<- mean(TCGA_maf[TCGA_maf$Hugo_Symbol%in%genes_sel,"isHA_wt"])
+    else propHA_nonExpr<- c(propHA_nonExpr,mean(TCGA_maf[TCGA_maf$Hugo_Symbol%in%genes_sel,"isHA_wt"]))
+  }
+  cat("%HA in non-expressed",propHA_nonExpr," \n")
+  # Expr
+  for(i in 1:10){
+    genes_sel<- unlist(strsplit(as.character(GSEA_expr_GO[i,"genes"]),","))
+    # cat(mean(TCGA_maf[TCGA_maf$Hugo_Symbol%in%genes_sel,"isHA_wt"])) # 19.3%
+    if(i==1) propHA_expr<- mean(TCGA_maf[TCGA_maf$Hugo_Symbol%in%genes_sel,"isHA_wt"])
+    else propHA_expr<- c(propHA_expr,mean(TCGA_maf[TCGA_maf$Hugo_Symbol%in%genes_sel,"isHA_wt"]))
+  }
+  cat("%HA in expressed",propHA_expr," \n")
+  
+  # Plot with n HP?
+  propHP_nonExpr_ls_med<- sapply(propHP_nonExpr_ls, "median",na.rm=T)
+  propHP_expr_ls_med<- sapply(propHP_expr_ls, "median",na.rm=T)
+  cat("%HP in non-expressed",propHP_nonExpr_ls_med," \n")
+  cat("%HP in expressed",propHP_expr_ls_med," \n")
+  
+  for(i in 1:2){
+    if(i==1) svglite(paste0("results/figs/svg/fig",fig_nr,"_expr_GSEA_isHP_isHA.svg"))
+    else pdf(paste0("results/figs/pdf/fig",fig_nr,"_expr_GSEA_isHP_isHA.pdf"))
+    par(mfrow=c(1,2))
+    plot(100*c(propHP_nonExpr_ls_med,propHP_expr_ls_med),100*c(propHA_nonExpr,propHA_expr),pch=16,col=rep(c("blue","grey"),each=10),xlab="Median % hydrophobic aa per gene",ylab="% mutations in HLA binding exome",frame.plot=F,xlim=c(45,60),ylim=c(15,55))
+    abline(h=100*mean(TCGA_maf[,"isHA_wt"],na.rm=T),lty=2)
+    abline(v=100*mean(GPPM_aa_t_propHP,na.rm=T),lty=2)
+    legend("topleft",c("Top 10 enriched:", "Non-expressed genes", "Expressed genes"),text.col=c("black","blue","grey"),bty="n")
     dev.off()
   }
 }

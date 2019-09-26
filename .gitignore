@@ -18,3 +18,4 @@ scripts/arch/
 scripts/functions/arch/
 scripts/other/arch/
 temp/
+packrat/lib*/

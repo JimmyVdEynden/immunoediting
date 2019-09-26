@@ -27,7 +27,6 @@
 
   # Cancer colors
   source("scripts/functions/cancer_cols.R")
-  # library(BSDA) # sign test
 }
 
 # Load functions
